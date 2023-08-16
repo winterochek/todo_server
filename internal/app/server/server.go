@@ -6,24 +6,28 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	jwtclient "github.com/winterochek/todo-server/internal/app/jwt-client"
 	"github.com/winterochek/todo-server/internal/app/model"
 	"github.com/winterochek/todo-server/internal/app/store"
 )
 
 var (
-	errIncorrectEmailOrPassword = errors.New("incorrent email or password")
-	errUnathorized              = errors.New("unauthorized")
+	ErrIncorrectEmailOrPassword = errors.New("incorrent email or password")
+	ErrUnathorized              = errors.New("unauthorized")
+	ErrInternal                 = errors.New("internal server error")
 )
 
 type server struct {
-	router *mux.Router
-	store  store.Store
+	router    *mux.Router
+	store     store.Store
+	jwtClient *jwtclient.JWTClient
 }
 
-func NewServer(st store.Store) *server {
+func NewServer(st store.Store, jwtClient *jwtclient.JWTClient) *server {
 	s := &server{
-		router: mux.NewRouter(),
-		store:  st,
+		router:    mux.NewRouter(),
+		store:     st,
+		jwtClient: jwtClient,
 	}
 	s.ConfigureRouter()
 	return s
@@ -32,6 +36,7 @@ func NewServer(st store.Store) *server {
 func (s *server) ConfigureRouter() {
 	s.router.HandleFunc("/users/create", s.HandleUsersCreate()).Methods("POST")
 	s.router.HandleFunc("/users", s.HandleUsersLogin()).Methods("POST")
+	s.router.HandleFunc("/users", s.AuthMiddleware(s.HandleGetUsers())).Methods("GET")
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +59,11 @@ func (s *server) HandleUsersCreate() http.HandlerFunc {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
+	type response struct {
+		User  *model.User `json:"user"`
+		Token string      `json:"token"`
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &request{}
 		err := json.NewDecoder(r.Body).Decode(req)
@@ -72,7 +82,17 @@ func (s *server) HandleUsersCreate() http.HandlerFunc {
 			return
 		}
 		u.Sanitaze()
-		s.respond(w, r, http.StatusCreated, u)
+		token, err := s.jwtClient.GenerateToken(u.ID)
+		if err != nil {
+			s.error(w, r, http.StatusInternalServerError, ErrInternal)
+			return
+		}
+
+		res := &response{
+			User:  &u,
+			Token: token,
+		}
+		s.respond(w, r, http.StatusCreated, res)
 	}
 }
 
@@ -80,6 +100,10 @@ func (s *server) HandleUsersLogin() http.HandlerFunc {
 	type request struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+	}
+	type response struct {
+		User  *model.User `json:"user"`
+		Token string      `json:"token"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &request{}
@@ -91,10 +115,23 @@ func (s *server) HandleUsersLogin() http.HandlerFunc {
 
 		u, err := s.store.User().FindByEmail(req.Email)
 		if err != nil || !u.ComparePasswords(req.Password) {
-			s.error(w, r, http.StatusUnauthorized, errIncorrectEmailOrPassword)
+			s.error(w, r, http.StatusUnauthorized, ErrIncorrectEmailOrPassword)
 			return
 		}
 
 		s.respond(w, r, http.StatusOK, u)
+	}
+}
+
+func (s *server) HandleGetUsers() http.HandlerFunc {
+	type request struct {
+		UserID int
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		userId, ok := r.Context().Value(context_userId_key).(int)
+		if !ok {
+			s.error(w, r, http.StatusInternalServerError, ErrInternal)
+		}
+		s.respond(w, r, http.StatusOK, userId)
 	}
 }
