@@ -9,6 +9,7 @@ import (
 	jwtclient "github.com/winterochek/todo-server/internal/app/jwt-client"
 	"github.com/winterochek/todo-server/internal/app/model"
 	"github.com/winterochek/todo-server/internal/app/store"
+	"github.com/winterochek/todo-server/internal/helpers"
 )
 
 var (
@@ -37,6 +38,10 @@ func (s *server) ConfigureRouter() {
 	s.router.HandleFunc("/users", s.HandleUsersLogin()).Methods("POST")
 	s.router.HandleFunc("/users", s.AuthMiddleware(s.HandleGetUsers())).Methods("GET")
 	s.router.HandleFunc("/tasks", s.AuthMiddleware(s.HandleTaskCreate())).Methods("POST")
+	s.router.HandleFunc("/tasks", s.AuthMiddleware(s.HandleMultipleTasksRead())).Methods("GET")
+	s.router.HandleFunc("/tasks/{id:[0-9]+}", s.AuthMiddleware(s.HandleSingleTaskRead())).Methods("GET")
+	s.router.HandleFunc("/tasks/{id:[0-9]+}", s.AuthMiddleware(s.HandleTasksUpdate())).Methods("PUT")
+	s.router.HandleFunc("/tasks/{id:[0-9]+}", s.AuthMiddleware(s.HandleTasksDelete())).Methods("DELETE")
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -151,9 +156,10 @@ func (s *server) HandleGetUsers() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		userId, ok := r.Context().Value(context_userId_key).(int)
-		if !ok {
+		userId, err := h.GetUsedIDFromContext(r.Context(), context_userId_key)
+		if err != nil {
 			s.error(w, r, http.StatusInternalServerError, ErrInternal)
+			return
 		}
 
 		users, err := s.store.User().FindAll()

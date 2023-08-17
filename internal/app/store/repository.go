@@ -11,4 +11,8 @@ type UserRepository interface {
 
 type TaskRepository interface {
 	Create(*model.Task) error
+	ReadOne(id int, userId int) (*model.Task, error) 
+	ReadAll(userId int) ([]*model.Task, error)
+	Update(*model.Task) error
+	Delete(taskId, userId int) error
 }

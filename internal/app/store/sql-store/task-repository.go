@@ -54,8 +54,9 @@ func (tr *TaskRepository) ReadAll(userId int) ([]*model.Task, error) {
 }
 
 func (tr *TaskRepository) Update(t *model.Task) error {
-	query := "UPDATE tasks SET content = $1, completed = $2, updated_at = $3 WHERE id = $4"
-	_, err := tr.store.db.Exec(query, t.Content, t.Completed, time.Now(), t.ID)
+	query := "UPDATE tasks SET content = $1, completed = $2, updated_at = $3 WHERE id = $4 AND user_id = $5 RETURNING updated_at, created_at"
+
+	err := tr.store.db.QueryRow(query, t.Content, t.Completed, time.Now(), t.ID, t.UserID).Scan(&t.UpdatedAt, &t.CreatedAt)
 	if err != nil {
 		return err
 	}

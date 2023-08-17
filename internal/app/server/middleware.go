@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	helpers "github.com/winterochek/todo-server/internal/helpers/splice-token"
+	h "github.com/winterochek/todo-server/internal/helpers"
 )
 
 const (
@@ -17,12 +17,13 @@ var (
 	ErrNoAuthorizationHeader          = errors.New("Authorization header is missing")
 	ErrWrongTypeOfAuthorizationHeader = errors.New("Authorization header type is wrong")
 	ErrNotAuthorized                  = errors.New("Not authorized")
+	ErrNotFound                       = errors.New("Not found")
 )
 
 func (s *server) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get(header_authorization_key)
-		tokenString, err := helpers.SpliceToken(authHeader)
+		tokenString, err := h.SpliceToken(authHeader)
 		if err != nil {
 			s.error(w, r, http.StatusUnauthorized, ErrNotAuthorized)
 			return
