@@ -13,7 +13,6 @@ import (
 
 var (
 	ErrIncorrectEmailOrPassword = errors.New("incorrent email or password")
-	ErrUnathorized              = errors.New("unauthorized")
 	ErrInternal                 = errors.New("internal server error")
 )
 
@@ -37,6 +36,7 @@ func (s *server) ConfigureRouter() {
 	s.router.HandleFunc("/users/create", s.HandleUsersCreate()).Methods("POST")
 	s.router.HandleFunc("/users", s.HandleUsersLogin()).Methods("POST")
 	s.router.HandleFunc("/users", s.AuthMiddleware(s.HandleGetUsers())).Methods("GET")
+	s.router.HandleFunc("/tasks", s.AuthMiddleware(s.HandleTaskCreate())).Methods("POST")
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +58,7 @@ func (s *server) HandleUsersCreate() http.HandlerFunc {
 	type request struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Username string `json:"username"`
 	}
 	type response struct {
 		User  *model.User `json:"user"`
@@ -74,6 +75,17 @@ func (s *server) HandleUsersCreate() http.HandlerFunc {
 		u := model.User{
 			Email:    req.Email,
 			Password: req.Password,
+			Username: req.Username,
+		}
+
+		if err := u.Validate(); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		if err := u.BeforeCreate(); err != nil {
+			s.error(w, r, http.StatusInternalServerError, err)
+			return
 		}
 
 		err = s.store.User().Create(&u)
@@ -119,19 +131,41 @@ func (s *server) HandleUsersLogin() http.HandlerFunc {
 			return
 		}
 
-		s.respond(w, r, http.StatusOK, u)
+		token, err := s.jwtClient.GenerateToken(u.ID)
+		if err != nil {
+			s.error(w, r, http.StatusInternalServerError, ErrInternal)
+			return
+		}
+		res := &response{
+			User:  u,
+			Token: token,
+		}
+		s.respond(w, r, http.StatusOK, res)
 	}
 }
 
 func (s *server) HandleGetUsers() http.HandlerFunc {
-	type request struct {
-		UserID int
+	type response struct {
+		Users  []*model.User `json:"users"`
+		UserId int           `json:"userId"`
 	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		userId, ok := r.Context().Value(context_userId_key).(int)
 		if !ok {
 			s.error(w, r, http.StatusInternalServerError, ErrInternal)
 		}
-		s.respond(w, r, http.StatusOK, userId)
+
+		users, err := s.store.User().FindAll()
+		if err != nil {
+			s.error(w, r, http.StatusInternalServerError, ErrInternal)
+		}
+
+		res := &response{
+			Users:  users,
+			UserId: userId,
+		}
+
+		s.respond(w, r, http.StatusOK, res)
 	}
 }

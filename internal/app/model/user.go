@@ -1,16 +1,20 @@
 package model
 
 import (
+	"time"
+
 	"github.com/go-ozzo/ozzo-validation/is"
 	"github.com/go-ozzo/ozzo-validation/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
-	ID                int    `json:"id"`
-	Email             string `json:"email"`
-	EncryptedPassword string `json:"-"`
-	Password          string `json:"password,omitempty"`
+	ID                int       `json:"id"`
+	Email             string    `json:"email"`
+	Username          string    `json:"username"`
+	EncryptedPassword string    `json:"-"`
+	Password          string    `json:"password,omitempty"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 // Hash password before saving to DB
@@ -35,6 +39,11 @@ func (u *User) Validate() error {
 			// plain password is required in case no encrypted pass provided
 			validation.By(validation.RuleFunc(requiredIf(u.EncryptedPassword == ""))),
 			validation.Length(8, 20)),
+		validation.Field(
+			&u.Username,
+			validation.Required,
+			validation.Length(3, 20),
+		),
 	)
 }
 
