@@ -1,7 +1,13 @@
 package api_test
 
-import "testing"
+import (
+	"testing"
+)
 
-func TestAuthMiddleware(t *testing.T){
-	
+func TestAuthMiddleware_AuthorizedRequest(t *testing.T) {
+
+}
+
+func TestAuthMiddleware_UnauthorizedRequest(t *testing.T) {
+
 }

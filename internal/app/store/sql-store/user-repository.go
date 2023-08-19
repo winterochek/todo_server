@@ -16,7 +16,7 @@ func (ur *UserRepository) Create(u *model.User) error {
 	if err := ur.store.db.QueryRow(
 		"INSERT INTO users (email, username, encrypted_password) VALUES ($1, $2, $3) RETURNING id, created_at",
 		u.Email, u.Username, u.EncryptedPassword,
-	).Scan(&u.ID, *&u.CreatedAt); err != nil {
+	).Scan(&u.ID, &u.CreatedAt); err != nil {
 		return store.ErrEmailOrUsernameIsTaken
 	}
 	return nil
@@ -55,7 +55,7 @@ func (ur *UserRepository) FindById(id int) (*model.User, error) {
 
 // find all users
 func (ur *UserRepository) FindAll() ([]*model.User, error) {
-	var users []*model.User
+	users := []*model.User{}
 
 	rows, err := ur.store.db.Query("SELECT id, email, username FROM users")
 	if err != nil {
